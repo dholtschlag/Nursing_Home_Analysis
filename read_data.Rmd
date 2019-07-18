@@ -19,6 +19,9 @@ rating <- read.table(file = 'Data/Nursing Home Rating.tsv', sep = '\t',
                      header = TRUE, stringsAsFactors = FALSE,
                      colClasses = c('character', 'character', 'factor'))
 
+provider <- read.csv(file = 'Data/Nursing Home Provider_Info.tsv', sep='\t',
+                       header = TRUE, stringsAsFactors = FALSE)
+
 ```
 
 ## Including Plots
