@@ -1,0 +1,32 @@
+---
+title: "Read rating table"
+author: "Dave Holtschlag"
+date: "7/18/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Read Nursing Home Rating tsv file into R environment.
+
+
+```{r read_ratings}
+
+rating <- read.table(file = 'Data/Nursing Home Rating.tsv', sep = '\t', 
+                     header = TRUE, stringsAsFactors = FALSE,
+                     colClasses = c('character', 'character', 'factor'))
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
