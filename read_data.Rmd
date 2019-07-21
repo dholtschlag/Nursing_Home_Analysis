@@ -1,68 +1,119 @@
 ---
-title: "Read rating table"
+title: "Analysis of Poorly Performing Nursing Homes within the United States"
 author: "Dave Holtschlag"
-date: "7/18/2019"
-output: html_document
+date: " `r format(Sys.Date(), '%A %B %d, %Y') ` "
+output: 
+  html_document:
+    toc: true
+    toc_float: true
 ---
 
 ```{r setup, include=FALSE}
 library(tidyverse)
 # library(kable)
 library(kableExtra)
+library(ggthemes)
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Read Nursing Home Rating tsv file into R environment.
+## Sources of Data
+
+### Source of Nursing Home Provider Data
+https://data.medicare.gov/Nursing-Home-Compare/Provider-Info/4pq5-n9py/data
+This provider data set was exported as a TSV for Excel file and downloaded from the above site on July 18, 2019. The data set contains 15,527 rows and 85 columns of variables.
 
 
-```{r read_ratings}
+### Source Classifying Under Performing Nursing Homes as Special Focus Facility (SFF) or SFF Candidate
+https://www.aging.senate.gov/press-releases/casey-and-toomey-secure-secret-document-from-administration-list-includes-hundreds-of-poorly-performing-nursing-homes-across-the-country
+This rating data set was accessed as a PDF file as link labelled 'Read the list here' (https://www.aging.senate.gov/download/special-focus-facility-list-with-cover-letter).
+The dataset contains 478 rows with unique Federal Provider Numbers and 3 columns of variables
 
-# Read in Nursery home ratings
-rating <- read.csv(file = 'Data/Nursing Home Rating.tsv', sep = '\t', 
-                     header = TRUE, stringsAsFactors = FALSE,
-                     colClasses = c('character', 'character', 'factor'))
+Supplimentary information was obtained from the link labelled 'Read the report from Sens. Casey and Toomey here.' (https://www.aging.senate.gov/download/casey/toomey-sff-report), the link labelled 'Read the letter to CMS from Sens. Casey and Toomey here. (https://www.aging.senate.gov/imo/media/doc/2019.3.4%20Aging%20Casey%20Toomey%20Letter%20to%20CMS%20Administrator%20re.%20Special%20Focus%20Facilities%20PA%20Final.pdf), and the link labelled 'Read the CMS response here. (https://www.aging.senate.gov/imo/media/doc/CMS%20Response%20to%20Ranking%20Member%20Casey%20050319.pdf).
 
-# Read in Nursery home info
+
+### Source of data on penalties on all US Nursing Homes
+https://data.medicare.gov/Nursing-Home-Compare/All-US-Nursing-Home-Penalties/2shu-hjj2
+Data was exported on July 19, 2019, in TSV for Excel format.
+
+
+```{r read_data}
+
+# Read in nursing home provider info
 # Note: read.csv was more robust reading the table than read.table
 provider <- read.csv(file = 'Data/Nursing Home Provider_Info.tsv', sep='\t',
                        header = TRUE, stringsAsFactors = FALSE)
 
+# Confirm that all Provider.Numbers in the dataframe are unique
+if (length(unique(provider$Federal.Provider.Number) == nrow(provider))){
+  print(paste('All', nrow(provider), 'Provider.Numbers in the Provider dataset are unique.'))
+} else{
+  print(paste('There are',nrow(provider) - length(unique(provider$Federal.Provider.Number)),
+              'rows in the Provider dateset'))
+}
+
 # Add field to get breakdown by: "For profit" "Non profit" "Government"
 provider$Ownership.Type.General <- substr(provider$Ownership.Type, 1, 10)
 
-# left join rating and provider
-rate_provide <- left_join(rating, provider, by = 'Federal.Provider.Number')
-
-# left join provider and rating
-provide_rate <- left_join(provider, rating, by = 'Federal.Provider.Number')
-
-provide_rate$Special.Focus <- 'None'
-
-ndx <- which(substr(provide_rate$Special.Focus.Status, 1, 3) == 'SFF')
-
-provide_rate$Special.Focus[ndx] <- 'SFF or Candidate'
+# Read in Nursery home SFF ratings
+sff_rate <- read.csv(file = 'Data/Nursing Home Rating.tsv', sep = '\t',
+                     header = TRUE, stringsAsFactors = FALSE,
+                     colClasses = c('character', 'character', 'factor'))
 
 
-Special.Focus.State.table <- table(provide_rate$Provider.State,
-                                   provide_rate$Special.Focus)
+# Confirm that all Provider.Numbers in the sff_rate dataframe are unique
+if (length(unique(sff_rate$Federal.Provider.Number) == nrow(sff_rate))){
+  print(paste('All', nrow(sff_rate), 'Provider.Numbers in the sff_rate dataset are unique.'))
+} else{
+  print(paste('There are',nrow(sff_rate) - length(unique(sff_rate$Federal.Provider.Number)),
+              'rows in the Provider dateset'))
+}
 
+# Left join of provider and sff_rate dataframes
+sff_provider <- left_join(sff_rate, provider, by = 'Federal.Provider.Number')
+print( paste('Left join of sff_rate and provider dataframes has', nrow(sff_provider), 'rows.') )
+
+# Right join of provider and sff_rate dataframes
+provider_sff <- right_join(sff_rate, provider, by = 'Federal.Provider.Number')
+print( paste('Right join of sff_rate and provider dataframes has', nrow(provider_sff), 'rows.') )
+
+# Initialize variable to contain SFF or SFF Candidate variable
+provider_sff$SFF_or_Candidate <- 'None'
+
+# Find indices of provider_sff dataframe designated SFF or SFF candidate
+ndx <- which(substr(provider_sff$Special.Focus.Status, 1, 3) == 'SFF')
+
+# Replace 'None' with SFF Status based on index
+provider_sff$SFF_or_Candidate[ndx] <- 'SFF or Candidate'
+
+# Create frequency table of SFF by State
+Special.Focus.State.table <- table(provider_sff$Provider.State,
+                                   provider_sff$SFF_or_Candidate)
+
+# Convert frequency table of SFF by State to dataframe
 Special.Focus.State.df    <- as.data.frame.matrix(Special.Focus.State.table)
 
 Special.Focus.State.df$SFFc_per <- Special.Focus.State.df$`SFF or Candidate` /
   (Special.Focus.State.df$`SFF or Candidate` + Special.Focus.State.df$None) * 100
 
+#
+penalties <- read.csv(file = 'Data/All_US_Nursing_Home_Penalties.tsv',
+                      sep='\t', header = TRUE, stringsAsFactors = FALSE,
+                      colClasses = c('character', 'character', 'character',
+                                     'character','numeric'))
+penalties$Penalty.Date <- as.Date(penalties$Penalty.Date, "%m/%d/%Y")
+
+tmp <- left_join(penalties, provider[,1:2], by = 'Provider.Name')
+
 
 ```
 
-## Plots 
+## Variation in the number of nursing homes and residents among states 
 
 You can also embed plots, for example:
 
 ```{r freq_tables_by_state}
 
-# Ctrl-Shif + M -> '%>%'
-
-# 
+# Set up provider dataframe based on
 provider %>% 
   group_by(Provider.State) %>% 
   summarise(no.nursing.homes.in.state = n(), 
@@ -70,6 +121,7 @@ provider %>%
   ggplot(aes(x = reorder(Provider.State, -no.nursing.homes.in.state), 
              y = no.nursing.homes.in.state)) +
   geom_bar(stat = 'identity') +
+  theme_few()     +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 9)) +
   scale_y_continuous(breaks = c(2, 10, 50, 100, 200, 500, 1000, 1500), 
                      limits = c(0, 1500), trans = 'sqrt',
@@ -94,6 +146,7 @@ summary_data %>%
   ggplot(aes(x = reorder(Provider.State, -pop.in.state.nursing.homes), 
              y = pop.in.state.nursing.homes)) +
   geom_bar(stat = 'identity') +
+  theme_few() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 9)) +
   scale_y_continuous(
     # limits = c(1, 120000),
