@@ -1,0 +1,91 @@
+---
+title: "Star Ratings for Medicare Nursing Homes"
+author: "Dave Holtschlag"
+date: " `r format(Sys.Date(), '%A %B %d, %Y') ` "
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+bibliography: bib/bibliography.bib  
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(kableExtra)
+library(ggthemes)
+library(sf)
+library(rjson)
+library(zipcode)
+data("zipcode")
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Five Star Ratings for Nursing Homes 
+
+
+### Read in five star rating dataset
+
+```{r read_star_ratings}
+# Read in five star ratings for nursing homes
+# Note: read.csv was more robust reading the table than read.table
+star_rate <- read.csv(file = '../Data/Star_Ratings.tsv', sep='\t',
+                       header = TRUE, stringsAsFactors = FALSE)
+
+# Initialize variables to store latitude, longitude, and zipcode
+star_rate$Lat        <- rep(numeric(nrow(star_rate)))
+star_rate$Long       <- rep(numeric(nrow(star_rate)))
+Provider.Zip.Code    <- rep(character(nrow(star_rate))) 
+
+# Read Nursing Home Provider data if it not in memory
+if (!exists('provider')) {
+  # Read in nursing home provider info
+  provider <- read.csv(file = 'Data/Nursing Home Provider_Info.tsv', sep='\t',
+                       header = TRUE, stringsAsFactors = FALSE,
+                       colClasses = c(Provider.Zip.Code = 'character'))
+}
+
+
+# Populate zip code in star_rate dataframe from provider dataframe on Number, Name, and State
+star_rate <- left_join(star_rate, provider[,c(1,2,5,6)])
+
+# Populate Lat/Long fields by extracting Lat/Long from star_rate$Location.
+#   Lat/Long assumed to be based on geocoded address
+#   When address apparently inadequate for Lat/Long, approximate Lat/Long by zipcode
+for (i in 1:nrow(star_rate)){
+  if (stringr::str_detect(star_rate$Location[i], '\\(')){
+    str_lat_long  <- str_extract(star_rate$Location[i], '\\([0-9].+')
+    comma_pos     <- gregexpr(pattern =',',str_lat_long)
+    star_rate$Lat[i]  <- as.numeric(substr(str_lat_long, 2, comma_pos[[1]][1]-1))
+    star_rate$Long[i] <- as.numeric(substr(str_lat_long, comma_pos[[1]][1]+1, nchar(str_lat_long)-1))
+    star_rate$loc_source[i] <- 'address'
+  } else {
+    ndx <- which( zipcode$zip == star_rate$Provider.Zip.Code[i])
+    star_rate$Lat[i]  <- zipcode$latitude[ndx]
+    star_rate$Long[i] <- zipcode$longitude[ndx]
+    star_rate$loc_source[i] <- 'zipcode'
+  }
+}
+
+```
+
+## Plot Locations of Star Ratings within conterminous United States
+
+
+```{r pressure, echo=FALSE}
+
+us_map <- map_data('state')
+
+`%notin%` <- Negate(`%in%`)
+star_rate_cont <- star_rate$Provider.State %!in%  c('AK', 'HI')
+
+ggplot( aes(x = long, y = lat, group = group)) +
+  geom_polygon(fill = 'lightblue', color = 'black') +
+  theme_void() +
+  geom_point( data = star_rate, aes( x = star_rate$Long, y = star_rate$Lat, 
+                                     group = Overall.Rating, color = as.factor(Overall.Rating)))
+
+  
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

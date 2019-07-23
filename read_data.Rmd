@@ -6,6 +6,7 @@ output:
   html_document:
     toc: true
     toc_float: true
+bibliography: bib/bibliography.bib  
 ---
 
 ```{r setup, include=FALSE}
@@ -16,14 +17,23 @@ library(ggthemes)
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Sources of Data
+## Abstract
+An analysis of data on poorly performing nursing homes in the United States...[@falcone_u.s._2015]
 
-### Source of Nursing Home Provider Data
+## Introduction
+
+
+## Purpose
+The purpose of this article is to describe the relation between attributes of provides of nursing home care compiled by Medicare and measures of the quality of that care.  Quality of care include  
+
+### Sources of Data
+
+#### Source of Nursing Home Provider Data
 https://data.medicare.gov/Nursing-Home-Compare/Provider-Info/4pq5-n9py/data
 This provider data set was exported as a TSV for Excel file and downloaded from the above site on July 18, 2019. The data set contains 15,527 rows and 85 columns of variables.
 
 
-### Source Classifying Under Performing Nursing Homes as Special Focus Facility (SFF) or SFF Candidate
+#### Source Classifying Under Performing Nursing Homes as Special Focus Facility (SFF) or SFF Candidate
 https://www.aging.senate.gov/press-releases/casey-and-toomey-secure-secret-document-from-administration-list-includes-hundreds-of-poorly-performing-nursing-homes-across-the-country
 This rating data set was accessed as a PDF file as link labelled 'Read the list here' (https://www.aging.senate.gov/download/special-focus-facility-list-with-cover-letter).
 The dataset contains 478 rows with unique Federal Provider Numbers and 3 columns of variables
@@ -31,9 +41,17 @@ The dataset contains 478 rows with unique Federal Provider Numbers and 3 columns
 Supplimentary information was obtained from the link labelled 'Read the report from Sens. Casey and Toomey here.' (https://www.aging.senate.gov/download/casey/toomey-sff-report), the link labelled 'Read the letter to CMS from Sens. Casey and Toomey here. (https://www.aging.senate.gov/imo/media/doc/2019.3.4%20Aging%20Casey%20Toomey%20Letter%20to%20CMS%20Administrator%20re.%20Special%20Focus%20Facilities%20PA%20Final.pdf), and the link labelled 'Read the CMS response here. (https://www.aging.senate.gov/imo/media/doc/CMS%20Response%20to%20Ranking%20Member%20Casey%20050319.pdf).
 
 
-### Source of data on penalties on all US Nursing Homes
+#### Source of data on penalties on all US Nursing Homes
 https://data.medicare.gov/Nursing-Home-Compare/All-US-Nursing-Home-Penalties/2shu-hjj2
 Data was exported on July 19, 2019, in TSV for Excel format.
+
+### Ownership 
+https://data.medicare.gov/data/nursing-home-compare, accessed July 21, 2019
+A list of ownership information for currently active nursing homes.
+
+### Star Ratings based on Provider Info
+https://data.medicare.gov/Nursing-Home-Compare/Star-Ratings/ax9d-vq6k, July 21, 2019
+Star Ratings Based on Provider Info Overall, Health Inspection, Staffing, and Quality Measure Ratings for all active providers.
 
 
 ```{r read_data}
@@ -41,7 +59,8 @@ Data was exported on July 19, 2019, in TSV for Excel format.
 # Read in nursing home provider info
 # Note: read.csv was more robust reading the table than read.table
 provider <- read.csv(file = 'Data/Nursing Home Provider_Info.tsv', sep='\t',
-                       header = TRUE, stringsAsFactors = FALSE)
+                       header = TRUE, stringsAsFactors = FALSE,
+                     colClasses = c(Provider.Zip.Code = 'character'))
 
 # Confirm that all Provider.Numbers in the dataframe are unique
 if (length(unique(provider$Federal.Provider.Number) == nrow(provider))){
@@ -107,7 +126,7 @@ tmp <- left_join(penalties, provider[,1:2], by = 'Provider.Name')
 
 ```
 
-## Variation in the number of nursing homes and residents among states 
+### Variation in the number of nursing homes and residents among states 
 
 You can also embed plots, for example:
 
@@ -159,3 +178,5 @@ summary_data %>%
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## References
