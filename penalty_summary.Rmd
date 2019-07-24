@@ -1,0 +1,65 @@
+---
+title: "Penalties applied to nursing homes"
+author: "Dave Holtschlag"
+date: " `r format(Sys.Date(), '%A %B %d, %Y') ` "
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(kableExtra)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Summarize nursing home penality data over one or more fines or payment denials.
+
+
+### Read in penalty data
+
+```{r read_penalty_data}
+
+penalties <- read.csv(file = '../Data/All_US_Nursing_Home_Penalties.tsv', sep='\t',
+                       header = TRUE, stringsAsFactors = FALSE)
+
+# Convert chr representation of date to date variable
+penalties$Penalty.Date <- as.Date(penalties$Penalty.Date, format = "%m/%d/%Y")
+
+# Summarize over common Provider.Name and Provider.State
+sum_fines <- penalties %>% 
+  dplyr::filter(Penalty.Type == "Fine") %>% 
+  group_by(Provider.Name, Provider.State) %>% 
+  summarise(fine_tot = sum(Fine.Amount),
+            fine_cnt = n(),
+            fine_date_min = min(Penalty.Date),
+            fine_date_max = max(Penalty.Date))
+
+sum_denial <- penalties %>% 
+  dplyr::filter(Penalty.Type == "Payment Denial") %>% 
+  group_by(Provider.Name, Provider.State) %>% 
+  summarise(pay_deny_cnt = n(),
+            pay_deny_date_min = min(Penalty.Date),
+            pay_deny_date_max = max(Penalty.Date))
+
+
+
+# Read Nursing Home Provider data if it not in memory
+if (!exists('provider', mode = 'list')) {
+  # Read in nursing home provider info
+  provider <- read.csv(file = 'Data/Nursing Home Provider_Info.tsv', sep='\t',
+                       header = TRUE, stringsAsFactors = FALSE,
+                       colClasses = c(Provider.Zip.Code = 'character'))
+}
+
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

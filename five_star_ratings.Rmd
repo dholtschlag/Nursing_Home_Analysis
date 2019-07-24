@@ -9,6 +9,14 @@ output:
 bibliography: bib/bibliography.bib  
 ---
 
+## Abstract
+This document is intended to facilitate the understanding of Star Ratings provided by Centers for Medicare and Medicaid Services (CMS) to help in the characterization and selection of nursing homes.   
+
+
+
+
+Load libraries and initialize variables
+
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(kableExtra)
@@ -16,14 +24,22 @@ library(ggthemes)
 library(sf)
 library(rjson)
 library(zipcode)
+library(ggmap)
+library(plotly)
+library(mapview)
+library(scales)
+library(grid)
+library(cowplot)
 data("zipcode")
+echoTF <- TRUE
+fig_no <- 0
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Five Star Ratings for Nursing Homes 
 
 
-### Read in five star rating dataset
+### Read in five-star rating dataset
 
 ```{r read_star_ratings}
 # Read in five star ratings for nursing homes
@@ -44,7 +60,6 @@ if (!exists('provider')) {
                        colClasses = c(Provider.Zip.Code = 'character'))
 }
 
-
 # Populate zip code in star_rate dataframe from provider dataframe on Number, Name, and State
 star_rate <- left_join(star_rate, provider[,c(1,2,5,6)])
 
@@ -57,7 +72,7 @@ for (i in 1:nrow(star_rate)){
     comma_pos     <- gregexpr(pattern =',',str_lat_long)
     star_rate$Lat[i]  <- as.numeric(substr(str_lat_long, 2, comma_pos[[1]][1]-1))
     star_rate$Long[i] <- as.numeric(substr(str_lat_long, comma_pos[[1]][1]+1, nchar(str_lat_long)-1))
-    star_rate$loc_source[i] <- 'address'
+    star_rate$loc_source[i] <- 'geocode'
   } else {
     ndx <- which( zipcode$zip == star_rate$Provider.Zip.Code[i])
     star_rate$Lat[i]  <- zipcode$latitude[ndx]
@@ -68,24 +83,136 @@ for (i in 1:nrow(star_rate)){
 
 ```
 
-## Plot Locations of Star Ratings within conterminous United States
+### Convert five_star dataframe to spatial object using sf package
 
 
-```{r pressure, echo=FALSE}
+```{r convert_df_spatial}
 
-us_map <- map_data('state')
+star_rate_sf   <- st_as_sf(star_rate, coords = c("Long", "Lat"),
+                         crs="+proj=longlat +datum=WGS84")
 
-`%notin%` <- Negate(`%in%`)
-star_rate_cont <- star_rate$Provider.State %!in%  c('AK', 'HI')
+# Confirms both 'sf' and 'data.frame' classes 
+class(star_rate_sf)
 
-ggplot( aes(x = long, y = lat, group = group)) +
-  geom_polygon(fill = 'lightblue', color = 'black') +
-  theme_void() +
-  geom_point( data = star_rate, aes( x = star_rate$Long, y = star_rate$Lat, 
-                                     group = Overall.Rating, color = as.factor(Overall.Rating)))
+# Creates a map of the conterminous United States
+star_rate_sf_c <- subset(star_rate_sf, !(Provider.State %in% c('AK','HI','PR','GU')))
 
-  
+
 
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## Plot Locations of Star Ratings within conterminous United States
+
+
+```{r pressure, echo=FALSE, eval = FALSE}
+
+us_map <- map_data('state')
+
+# ndx are the indices of non-conterminous state
+star_rate_cont <- subset(star_rate, !(Provider.State %in% c('AK','HI','PR','GU')))
+
+us_map %>% 
+  ggplot( aes(x = long, y = lat, group = group)) +
+  geom_polygon(fill = 'white', color = 'black') +
+  theme( legend.position = 'bottom') +
+  # theme_void() +
+  geom_point( data = star_rate_cont, aes( x = Long, y = Lat, 
+                                     group = NA, color = as.factor(Overall.Rating))) +
+  # coord_map( projection = 'mercator') +
+  coord_map( projection = 'conic', lat0 = 30) +
+  scale_x_continuous( name = "Longitude")  +
+  scale_y_continuous( name = "Latitude")
+
+  
+  
+
+
+```
+
+### Five-Star Quality System
+
+Summary: 
+
+The Nursing Home Compare Web [site features a quality rating system that gives each nursing home a rating of between 1 and 5 stars.  Nursing homes with 5 stars are considered to have much above average quality and nursing homes with 1 star are considered to have quality much below average.  There is one Overall 5-star rating for each nursing home, and a separate rating for each of the following three sources of information:
+
+Health Inspections – The health inspection rating contains the 3 most recent health inspections and investigations due to complaints.  This information is gathered by trained, objective inspectors who go onsite to the nursing home and follow a specific process to determine the extent to which a nursing home has met Medicaid and Medicare’s minimum quality requirements.  The most recent survey findings are weighted more than the prior year.
+
+Staffing – The staffing rating has information about the number of hours of care provided on average to each resident each day by nursing staff.  This rating considers differences in the levels of residents' care need in each nursing home.  For example, a nursing home with residents who had more severe needs would be expected to have more nursing staff than a nursing home where the resident needs were not as high.
+
+Quality Measures (QMs) – The quality measure rating has information on 17 different physical and clinical measures for nursing home residents.   The QMs offer information about how well nursing homes are caring for their residents’ physical and clinical needs.
+
+#### Star rating calculations
+
+CMS creates the overall star rating for nursing homes from 3 parts: 1) Health inspections 2) Quality of resident care measures and 3) Staffing. Star ratings for each part and for the overall rating range from 1 star to 5 stars, with more stars indicating better quality. CMS assigns the overall star rating in these steps: 
+Step 1: Start with the health inspections rating.
+Step 2: Add 1 star if the staffing rating is 4 or 5 stars and greater than the health inspections rating. Subtract 1 star if the staffing rating is 1 star.
+Step 3: Add 1 star if the quality of resident care rating is 5 stars; subtract 1 star if the quality of resident care measures rating is 1 star.
+Step 4: If the health inspections rating is 1 star, then the overall rating cannot be upgraded by more than 1 star based on the staffing and quality of resident care ratings.
+Step 5: If a nursing home is a special focus facility, all star ratings are suppressed.
+
+You can find brief descriptions of the health inspection, staffing, and quality of resident care ratings in their respective sections below [NHC.
+
+
+```{r dist_star_rating, echo = echoTF, fig.width = 9, fig.cap = paste0("Figure ", `r fig_no+1`, '. Distribution of overall star ratings among ranked categories.' }
+
+star_rate_sf_c %>%
+  ggplot( aes( x = Overall.Rating)) +
+  geom_bar( aes(y = ..prop.., group = 1), fill = 'blue') +
+  scale_y_continuous(labels = percent, name = "Proportion")
+
+```
+
+
+```{r star_rate_dist, fig.width = 9, fig.cap = "Cluster barplot showing the distribution }
+
+
+tmp <- star_rate_sf_c[,c(1:4,6,8,10,12)] %>% 
+  dplyr::rename('Overall'           = Overall.Rating,
+                'Health.Inspection' = Health.Inspection.Rating,
+                'Quality.Measures'  = QM.Rating,
+                'Staffing'          = Staffing.Rating,
+                'RN.Staffing'       = RN.Staffing.Rating) %>% 
+  tidyr::gather(key = 'Category', value = "Rating",
+                Overall, Quality.Measures, Health.Inspection, 
+                 Staffing, RN.Staffing,
+                factor_key = TRUE)
+
+
+
+p <- tmp %>% 
+  ggplot( aes( x = Rating, 
+               fill = factor(Category))) +
+  geom_bar(stat = 'count', position=position_dodge()) + 
+  xlab('') +
+  theme(legend.position = 'bottom') 
+  ggdraw(p) + 
+    draw_label("(Overall) Rating: 1-Much Below Average  2-Below Average  3-Average  4-Above Average  5-Much Below Average",
+                         x = 0.10, y = 0.13, hjust = 0,
+                         size = 12)
+
+
+
+
+```
+
+### Interactive view of overall Star rating within the conterminous United States
+
+The interactive view provides the user with the ability to zoom in and out of a map of the conterminous United States, and drag the displayed part of the map.   
+
+```{r mapview_plt, fig.width = 9}
+
+# Loading this data is needed to generate an html output file.
+# load('star_rate_sf_c.rdata')
+
+mapview(star_rate_sf_c, 
+        zcol = 'Overall.Rating', map.types = "OpenStreetMap",
+        legend = TRUE,
+        legend.pos = "bottomright")
+
+
+```
+
+
+
+
