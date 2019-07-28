@@ -38,6 +38,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Five Star Ratings for Nursing Homes 
 
+<https://www.medicare.gov/nursinghomecompare/search.html>
+[link](www.medicare.gov/nursinghomecompare/search.html)
+
 
 ### Read in five-star rating dataset
 
